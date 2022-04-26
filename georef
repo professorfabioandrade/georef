@@ -1,0 +1,137 @@
+import numpy as np
+import math
+
+#Camera model
+K = np.array([[1055.3342285156250000, 0, 990.0682373046875],[0, 1055.334228515625, 544.24639892578125],[0, 0, 1]])
+print(K)
+
+#Image frame to Camera frame
+
+#Image frame vector i
+u = 1345 #on the table
+v = 88 #on the table
+#u = 974 #zero drone
+#v = 655 #zero drone
+#u = 1206 #north from drone
+#v = 1#north from drone
+#u= 1316 #floor
+#v = 139 #floor
+u = 1293 #top left
+v = 57
+u = 1391 #top right
+v = 55
+u = 1297 #bottom left
+v = 128
+#u = 1396 #bottom right
+#v = 126
+#u = 1371 #under right
+#v = 157
+#u = 1281 #under left
+#v = 154
+
+i = np.array([[u],[v],[1]])
+
+#Calculate Camera frame vector prime
+P_C_prime = np.linalg.inv(K) @ i
+
+print(P_C_prime)
+
+# Camera frame to Gimbal frame
+R_C_to_G = np.array([[0, 0, 1],[1, 0, 0],[0, 1, 0]])
+
+T_C_to_G = np.array([[0],[0],[0]])
+
+P_G_prime = R_C_to_G @ P_C_prime + T_C_to_G
+
+print(P_G_prime)
+
+# Gimbal frame to UAS - IMU - frame
+yaw = 0.00176 #rad
+pitch = 0.00116 #rad
+roll =  0.00138 #rad
+
+#from left_cam_imu_transform
+#from the camera to the IMU of the ZED2: -0.002 -0.023 -0.002" rpy="0.00138 -0.00116 -0.00176
+
+#yaw = yaw*math.pi/180 #rad
+#pitch = pitch*math.pi/180 #rad
+#roll = roll*math.pi/180 #rad
+print(yaw*180/math.pi,pitch*180/math.pi,roll*180/math.pi)
+
+R_G_to_UAS = np.array([[math.cos(yaw)*math.cos(pitch),-math.sin(yaw)*math.cos(roll)+math.cos(yaw)*math.sin(pitch)*math.sin(roll),math.sin(yaw)*math.sin(roll)+math.cos(yaw)*math.cos(roll)*math.sin(pitch)]
+                ,
+                [math.sin(yaw)*math.cos(pitch),math.cos(yaw)*math.cos(roll)+math.sin(roll)*math.sin(pitch)*math.sin(yaw),-math.cos(yaw)*math.sin(roll)+math.sin(pitch)*math.sin(yaw)*math.cos(roll)]
+                  ,
+                  [-math.sin(pitch),math.cos(pitch)*math.sin(roll),math.cos(pitch)*math.cos(roll)]])
+
+T_G_to_UAS = np.array([[-0.002],[0.023],[0.002]])
+
+P_UAS_prime = R_G_to_UAS @ P_G_prime + T_G_to_UAS
+
+print(P_UAS_prime)
+
+print(3*P_UAS_prime)
+
+# UAS frame - IMU - to NED frame. from imu/data then rotated to NED
+#yaw = 6.156165920019568638 #rad
+#pitch = -0.4100276152492891568 #rad
+#roll = 0.02939145693704781417 #rad
+
+yaw = 6.046293468769378
+pitch = -1.466422693619277240
+roll = -0.1061368580805083922
+
+print(yaw*180/math.pi,pitch*180/math.pi,roll*180/math.pi)
+
+
+
+T_UAS_to_NED = np.array([[0],[0],[0]])
+
+R_UAS_to_NED = np.array([[math.cos(yaw)*math.cos(pitch),-math.sin(yaw)*math.cos(roll)+math.cos(yaw)*math.sin(pitch)*math.sin(roll),math.sin(yaw)*math.sin(roll)+math.cos(yaw)*math.cos(roll)*math.sin(pitch)]
+                ,
+                [math.sin(yaw)*math.cos(pitch),math.cos(yaw)*math.cos(roll)+math.sin(roll)*math.sin(pitch)*math.sin(yaw),-math.cos(yaw)*math.sin(roll)+math.sin(pitch)*math.sin(yaw)*math.cos(roll)]
+                  ,
+                  [-math.sin(pitch),math.cos(pitch)*math.sin(roll),math.cos(pitch)*math.cos(roll)]])
+
+P_NED_prime = R_UAS_to_NED @ P_UAS_prime + T_UAS_to_NED
+
+print(P_NED_prime)
+
+# NED frame to ENU frame
+R_NED_to_ENU = np.array([[0, 1, 0],[1, 0, 0],[0, 0, -1]])
+
+UTM_x = 0
+#581903.774
+
+UTM_y = 0
+#6582053.552
+
+UTM_z = 8.88
+
+T_NED_to_ENU = np.array([[UTM_x],[UTM_y],[UTM_z]])
+
+P_ENU_prime = R_NED_to_ENU @ P_NED_prime + T_NED_to_ENU
+
+print(P_ENU_prime)
+
+print(3*(R_NED_to_ENU @ P_NED_prime) + T_NED_to_ENU)
+
+# Calculating z_C
+z_ENU = 0.85
+
+#################
+T = T_NED_to_ENU + R_NED_to_ENU@T_UAS_to_NED + R_NED_to_ENU@R_UAS_to_NED@T_G_to_UAS + R_NED_to_ENU@R_UAS_to_NED@R_G_to_UAS@T_C_to_G
+print("T = ", T)
+z_T = T[2]
+print("z_T = ",z_T)
+z_ENU_prime = P_ENU_prime[2]
+print("z_ENU_prime = ",z_ENU_prime)
+#print("z_T = ",z_T)
+z_C = (z_ENU - z_T)/(z_ENU_prime - z_T)
+print("z_C = ",z_C)
+
+# Calculating P_ENU
+
+P_ENU = z_C*P_ENU_prime - z_C*T + T
+P_ENU = list(map(lambda P_ENU :str(P_ENU),P_ENU.round(4)))
+print(P_ENU)
