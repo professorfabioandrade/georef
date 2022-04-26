@@ -1,4 +1,4 @@
-Source code for Direct Georeferencing of images taken by Drones
+MATLAB and Python source code for Direct Georeferencing of images taken by Drones
 
 Link to paper: https://www.mdpi.com/1424-8220/22/2/604
 
